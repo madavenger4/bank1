@@ -32,7 +32,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     setLoading(false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bankData.getUserById, bankData.getAccountByUserId]);
+  }, [bankData.users, bankData.accounts]); // Depend on users and accounts arrays to re-run on data import
   
 
   useEffect(() => {
@@ -65,7 +65,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const value = {
+  const value: AuthContextType = {
     ...bankData,
     user,
     login,

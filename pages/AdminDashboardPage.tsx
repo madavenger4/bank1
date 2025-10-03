@@ -3,7 +3,9 @@ import { useAuth } from '../hooks/useAuth';
 import Header from '../components/Header';
 import Card from '../components/Card';
 import Input from '../components/Input';
-import { Transaction } from '../types';
+import { Transaction, User, Account } from '../types';
+import Notification from '../components/Notification';
+import Button from '../components/Button';
 
 type Tab = 'customers' | 'transactions';
 
@@ -29,9 +31,10 @@ const AdminDashboardPage: React.FC = () => {
                     />
                 </div>
 
-                <div>
+                <div className="space-y-6">
                     {activeTab === 'customers' && <CustomerAccounts />}
                     {activeTab === 'transactions' && <AllTransactions />}
+                    <DataManagement />
                 </div>
             </main>
         </div>
@@ -189,6 +192,84 @@ const StatCard: React.FC<{ label: string; value: string | number; color?: string
         <p className={`text-2xl font-bold ${color}`}>{value}</p>
     </div>
 );
+
+const DataManagement = () => {
+    const { users, accounts, transactions, importData, logout } = useAuth();
+    const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+
+    const handleExport = () => {
+        const data = {
+            users,
+            accounts,
+            transactions
+        };
+        const jsonString = JSON.stringify(data, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `zenith-bank-data-backup-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setNotification({ message: 'Data exported successfully.', type: 'success' });
+    };
+
+    const handleImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const text = e.target?.result;
+                if (typeof text !== 'string') {
+                    throw new Error("Failed to read file.");
+                }
+                const data = JSON.parse(text);
+                
+                if (!Array.isArray(data.users) || !Array.isArray(data.accounts) || !Array.isArray(data.transactions)) {
+                    throw new Error("Invalid file format. Ensure file contains users, accounts, and transactions arrays.");
+                }
+                
+                importData(data as { users: User[], accounts: Account[], transactions: Transaction[] });
+                setNotification({ message: 'Data imported successfully. You will be logged out.', type: 'success' });
+                
+                setTimeout(logout, 3000); 
+            } catch (err: any) {
+                setNotification({ message: `Import failed: ${err.message}`, type: 'error' });
+            } finally {
+                event.target.value = '';
+            }
+        };
+        reader.readAsText(file);
+    };
+
+    return (
+        <>
+            {notification && <Notification message={notification.message} type={notification.type} onClose={() => setNotification(null)} />}
+            <Card title="Data Management">
+                <div className="flex flex-col md:flex-row gap-6 items-start">
+                    <div className="flex-1">
+                        <h3 className="font-semibold text-slate-200">Export Data</h3>
+                        <p className="text-sm text-slate-400 mb-3">Download all customer and transaction data as a JSON file. Keep this file in a secure location as a backup.</p>
+                        <Button onClick={handleExport} variant="secondary">Export All Data</Button>
+                    </div>
+                    <div className="w-full md:w-px bg-slate-700 self-stretch my-2 md:my-0"></div>
+                    <div className="flex-1">
+                        <h3 className="font-semibold text-slate-200">Import Data</h3>
+                        <p className="text-sm text-slate-400 mb-3">Upload a previously exported JSON file to restore the system's state. This will overwrite all current data.</p>
+                        <label htmlFor="import-file" className="cursor-pointer inline-flex items-center justify-center font-semibold rounded-md bg-subtle hover:bg-secondary text-slate-200 focus:ring-slate-400 px-4 py-2 text-base transition-all duration-300">
+                            Import from File
+                        </label>
+                        <input id="import-file" type="file" className="hidden" accept="application/json" onChange={handleImport} />
+                    </div>
+                </div>
+            </Card>
+        </>
+    );
+};
 
 
 export default AdminDashboardPage;

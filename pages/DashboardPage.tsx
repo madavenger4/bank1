@@ -10,12 +10,13 @@ import { Transaction, TransactionType } from '../types';
 import { generateStatementPDF } from '../services/pdfService';
 import Notification from '../components/Notification';
 
-type ActiveModal = 'deposit' | 'withdraw' | 'transfer' | 'changePin' | null;
+type ActiveModal = 'deposit' | 'withdraw' | 'transfer' | 'changePin' | 'balanceInquiry' | null;
 
 const DashboardPage: React.FC = () => {
     const { user, getTransactionsByAccountId, refreshUser } = useAuth();
     const [activeModal, setActiveModal] = useState<ActiveModal>(null);
     const [notification, setNotification] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+    const [isBalanceVisible, setIsBalanceVisible] = useState(false);
 
     const transactions = user ? getTransactionsByAccountId(user.account.accountNumber) : [];
 
@@ -38,7 +39,11 @@ const DashboardPage: React.FC = () => {
             {notification && <Notification message={notification.message} type={notification.type} onClose={() => setNotification(null)} />}
             <Header />
             <main className="container mx-auto p-4 md:p-6 space-y-6">
-                <AccountSummaryCard account={user.account} />
+                <AccountSummaryCard 
+                    account={user.account} 
+                    isBalanceVisible={isBalanceVisible}
+                    onViewBalanceClick={() => setActiveModal('balanceInquiry')}
+                />
                 <ActionButtons onButtonClick={setActiveModal} />
                 <TransactionHistoryCard transactions={transactions} user={user} account={user.account} />
             </main>
@@ -47,16 +52,37 @@ const DashboardPage: React.FC = () => {
             <WithdrawModal isOpen={activeModal === 'withdraw'} onClose={() => setActiveModal(null)} onSuccess={handleSuccess} showNotification={showNotification} />
             <TransferModal isOpen={activeModal === 'transfer'} onClose={() => setActiveModal(null)} onSuccess={handleSuccess} showNotification={showNotification} />
             <ChangePinModal isOpen={activeModal === 'changePin'} onClose={() => setActiveModal(null)} onSuccess={handleSuccess} showNotification={showNotification} />
+            <BalanceInquiryModal 
+                isOpen={activeModal === 'balanceInquiry'} 
+                onClose={() => setActiveModal(null)}
+                onSuccess={() => {
+                    setIsBalanceVisible(true);
+                    setActiveModal(null);
+                    showNotification('Balance revealed.', 'success');
+                }}
+                showNotification={showNotification}
+            />
         </div>
     );
 };
 
-const AccountSummaryCard: React.FC<{ account: { balance: number; accountNumber: string; } }> = ({ account }) => (
+const AccountSummaryCard: React.FC<{ 
+    account: { balance: number; accountNumber: string; },
+    isBalanceVisible: boolean;
+    onViewBalanceClick: () => void;
+}> = ({ account, isBalanceVisible, onViewBalanceClick }) => (
     <Card className="bg-gradient-to-br from-primary to-primary-dark text-white">
         <div className="flex justify-between items-start">
             <div>
                 <p className="text-lg text-cyan-200">Current Balance</p>
-                <p className="text-4xl font-bold tracking-tight">${account.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                 {isBalanceVisible ? (
+                     <p className="text-4xl font-bold tracking-tight animate-fade-in">${account.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                ) : (
+                    <div className="flex items-center gap-4 mt-2">
+                        <p className="text-4xl font-bold tracking-tight">$ ●●●●</p>
+                        <Button size="sm" variant="secondary" onClick={onViewBalanceClick}>View</Button>
+                    </div>
+                )}
             </div>
             <div>
                 <p className="text-sm text-cyan-200 text-right">Account Number</p>
@@ -65,6 +91,7 @@ const AccountSummaryCard: React.FC<{ account: { balance: number; accountNumber: 
         </div>
     </Card>
 );
+
 
 const ActionButtons: React.FC<{ onButtonClick: (modal: ActiveModal) => void }> = ({ onButtonClick }) => (
     <Card>
@@ -155,29 +182,6 @@ const TransactionTypeBadge: React.FC<{ type: TransactionType }> = ({ type }) => 
 
 
 // MODAL COMPONENTS
-const BaseTransactionModal: React.FC<{
-    isOpen: boolean;
-    onClose: () => void;
-    title: string;
-    onSuccess: (message: string) => void;
-    showNotification: (message: string, type: 'error' | 'success') => void;
-    children: (isPinStage: boolean, setPinStage: React.Dispatch<React.SetStateAction<boolean>>) => React.ReactNode;
-}> = ({ isOpen, onClose, title, children }) => {
-    const [isPinStage, setPinStage] = useState(false);
-
-    const handleClose = () => {
-        setPinStage(false);
-        onClose();
-    };
-
-    return (
-        <Modal isOpen={isOpen} onClose={handleClose} title={title}>
-            {children(isPinStage, setPinStage)}
-        </Modal>
-    );
-};
-
-
 const DepositModal: React.FC<{ isOpen: boolean, onClose: () => void, onSuccess: (m: string) => void, showNotification: (m: string, t: 'error' | 'success') => void }> = ({ isOpen, onClose, onSuccess, showNotification }) => {
     const { user, deposit } = useAuth();
     const [amount, setAmount] = useState('');
@@ -414,6 +418,50 @@ const ChangePinModal: React.FC<{ isOpen: boolean, onClose: () => void, onSuccess
                     <Button type="submit" isLoading={isLoading}>Change PIN</Button>
                 </div>
             </form>
+        </Modal>
+    );
+};
+
+const BalanceInquiryModal: React.FC<{ 
+    isOpen: boolean, 
+    onClose: () => void, 
+    onSuccess: () => void, 
+    showNotification: (m: string, t: 'error' | 'success') => void 
+}> = ({ isOpen, onClose, onSuccess, showNotification }) => {
+    const { user, verifyPin } = useAuth();
+    const [pin, setPin] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+
+    const handleConfirm = async () => {
+        if (!user) return;
+        setIsLoading(true);
+        try {
+            const isValid = await verifyPin(user.id, pin);
+            if (!isValid) throw new Error("Incorrect PIN");
+            onSuccess();
+        } catch (err: any) {
+            showNotification(err.message, 'error');
+        } finally {
+            setIsLoading(false);
+            setPin('');
+        }
+    };
+    
+    const handleClose = () => {
+        setPin('');
+        onClose();
+    }
+
+    return (
+        <Modal isOpen={isOpen} onClose={handleClose} title="Balance Inquiry">
+            <div className="space-y-4 text-center">
+                <p>Enter your 4-digit PIN to view your account balance.</p>
+                <PinInput length={4} onChange={setPin} />
+                <div className="flex justify-end gap-2 pt-2">
+                    <Button variant="secondary" onClick={handleClose}>Cancel</Button>
+                    <Button onClick={handleConfirm} isLoading={isLoading} disabled={pin.length !== 4}>Confirm</Button>
+                </div>
+            </div>
         </Modal>
     );
 };

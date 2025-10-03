@@ -195,6 +195,15 @@ const useBankData = () => {
         account: accounts.find(acc => acc.userId === user.id)
       }));
   }, [users, accounts]);
+
+  const importData = (data: { users: User[], accounts: Account[], transactions: Transaction[] }) => {
+    if (!data.users || !data.accounts || !data.transactions) {
+      throw new Error("Invalid data file. Missing required fields.");
+    }
+    setUsers(data.users);
+    setAccounts(data.accounts);
+    setTransactions(data.transactions);
+  };
   
   return { 
     users, 
@@ -211,7 +220,8 @@ const useBankData = () => {
     withdraw,
     transfer,
     getTransactionsByAccountId,
-    getAllUsersWithAccounts
+    getAllUsersWithAccounts,
+    importData,
   };
 };
 
