@@ -1,0 +1,5 @@
+{
+  "name": "Copy of Zenith Bank Management System",
+  "description": "A comprehensive Bank Management System with user registration, secure login, transaction PINs, and an admin dashboard. Users can manage their accounts, perform transactions, and download statements. The system features a modern, minimal UI for a professional and trustworthy banking experience.",
+  "requestFramePermissions": []
+}
